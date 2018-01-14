@@ -139,7 +139,9 @@ def main():
     # Even if we restored the model, we will treat it as new training
     # if the trained model is written into an arbitrary location.
     is_overwritten_training = save_path != restore_path
-    with tf.Session(config=tf.ConfigProto(log_device_placement=False)) as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
 
