@@ -5,9 +5,8 @@ from model.layers import one_multiply_one_convolution, causal_convolution, resid
 
 class WaveNetModel(object):
 
-    def __init__(self, batch_size, seq_length, input_channels, layer_num, class_num, filter_num,
+    def __init__(self, seq_length, input_channels, layer_num, class_num, filter_num,
                  dilation_rates=(1, 2, 4, 8)):
-        self.batch_size = batch_size
         self.seq_length = seq_length
         self.input_channels = input_channels
         self.layer_num = layer_num

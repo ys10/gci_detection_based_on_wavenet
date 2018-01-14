@@ -15,9 +15,9 @@ def dtype_feature_function(ndarray):
     assert isinstance(ndarray, np.ndarray)
     dtype_ = ndarray.dtype
     if dtype_ == np.float64 or dtype_ == np.float32:
-        return lambda array: tf.train.Feature(float_list=tf.train.FloatList(value=array))
+        return lambda array: tf.train.Feature(bytes_list=tf.train.BytesList(value=[array.tobytes()]))
     elif dtype_ == np.int64:
-        return lambda array: tf.train.Feature(int64_list=tf.train.Int64List(value=array))
+        return lambda array: tf.train.Feature(bytes_list=tf.train.BytesList(value=[array.tobytes()]))
     else:
         raise ValueError("The input should be numpy ndarray. Instaed got {}".format(ndarray.dtype))
 
@@ -54,5 +54,16 @@ def main():
                 writer.write(example.SerializeToString())
 
 
+def validate(data_set_path):
+    for serialized_example in tf.python_io.tf_record_iterator(data_set_path):
+        example = tf.train.Example()
+        example.ParseFromString(serialized_example)
+        # features
+        wave = example.features.feature['wave'].bytes_list.value
+        labels = example.features.feature['labels'].bytes_list.value
+        print(wave, labels)
+
+
 if __name__ == '__main__':
     main()
+    # validate(data_path)
