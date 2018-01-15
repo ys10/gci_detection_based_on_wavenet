@@ -69,7 +69,7 @@ def full_file_names(file_dir):
         return files
 
 
-def make_mask(marks, wave_length, mask_range=128):
+def make_mask(marks, wave_length, mask_range=16):
     """
     Make mask based on mask range & marks.
     :param marks:

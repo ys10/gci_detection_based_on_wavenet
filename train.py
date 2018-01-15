@@ -84,7 +84,7 @@ def data_slice(seq_length, conditions, inputs, labels):
 
 def main():
     # network structure
-    layer_num = 10
+    layer_num = 3
     class_num = 1
     filter_num = 4
     dilation_rates = tuple([2**i for i in range(layer_num)])
