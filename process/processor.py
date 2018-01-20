@@ -8,6 +8,7 @@ wave_path = "data/wave/"
 marks_extension = ".marks"
 wave_extension = ".wav"
 data_path = "data/dataset.tfrecords"
+mask_range = 4
 
 
 def dtype_feature_function(ndarray):
@@ -37,7 +38,7 @@ def main():
             marks_data = read_marks_data(marks_path + key + marks_extension, rate, wave_length)
             print("number of marks:" + str(len(marks_data)))
             # mask
-            mask = make_mask(marks_data, wave_length)
+            mask = make_mask(marks_data, wave_length, mask_range=mask_range)
             # mask wave & marks data
             masked_wave = mask_wave(wave_data, mask)
             masked_marks = mask_marks_1d(marks_data, mask, wave_length)

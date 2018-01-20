@@ -65,20 +65,33 @@ def read_and_decode(filename):
     return wave, labels
 
 
-def data_slice(seq_length, conditions, inputs, labels):
-    batch_size = inputs.shape()[0]
+def slice_data(seq_length, conditions, inputs, labels):
+    # batch_size = inputs.get_shape().as_list()[0]
+    batch_size = 8
     # init
-    batch_conditions = tf.slice(conditions, [0], [seq_length - 1])
+    # batch_conditions = tf.slice(conditions, [0], [seq_length - 1])
+    batch_conditions = tf.slice(conditions, [0, 0], [seq_length - 1, 1])
     batch_inputs = tf.slice(inputs, [0, 0], [seq_length - 1, 1])
     batch_labels = tf.slice(labels, [0, 0], [seq_length - 1, 1])
+    print(str(batch_conditions))
+    print(str(batch_inputs))
+    print(str(batch_labels))
     # concat
     for i in range(1, batch_size):
-        condition = tf.slice(conditions, [i], [i + seq_length - 1])
+        print("######" + str(i))
+        # condition = tf.slice(conditions, [i], [i + seq_length - 1])
+        condition = tf.slice(conditions, [i, 0], [seq_length - 1, 1])
         batch_conditions = tf.concat([batch_conditions, condition], 0)
-        input = tf.slice(inputs, [i, 0], [i + seq_length - 1, 1])
+        input = tf.slice(inputs, [i, 0], [seq_length - 1, 1])
         batch_inputs = tf.concat([batch_inputs, input], 0)
-        label = tf.slice(labels, [i, 0], [i + seq_length - 1, 1])
+        label = tf.slice(labels, [i, 0], [seq_length - 1, 1])
         batch_labels = tf.concat([batch_labels, label], 0)
+        print(str(batch_conditions))
+        print(str(batch_inputs))
+        print(str(batch_labels))
+    # batch_conditions = tf.reshape(batch_conditions, [batch_size, seq_length, 2])
+    # batch_inputs = tf.reshape(batch_inputs, [batch_size, seq_length, 2])
+    # batch_labels = tf.reshape(batch_labels, [batch_size, seq_length, 2])
     return batch_conditions, batch_inputs, batch_labels
 
 
@@ -103,14 +116,20 @@ def main():
     conditions = tf.pad(conditions, paddings=tf.constant([[seq_length-1, seq_length-1]]))
     inputs = tf.pad(inputs, paddings=tf.constant([[seq_length-1, seq_length-1]]))
     labels = tf.pad(labels, paddings=tf.constant([[seq_length-1, seq_length]]))
-    print(tf.Session().run(conditions))
-    print(tf.Session().run(inputs))
-    print(tf.Session().run(labels))
     # 1d to 2d
+    print(str(conditions))
+    print(str(inputs))
+    print(str(labels))
+    conditions = tf.expand_dims(conditions, 1)
+    inputs = tf.expand_dims(inputs, 1)
+    labels = tf.expand_dims(labels, 1)
     inputs = tf.concat([inputs, 1-inputs], 1)
     labels = tf.concat([labels, 1-labels], 1)
+    print(str(conditions))
+    print(str(inputs))
+    print(str(labels))
     # batch
-    batch_conditions, batch_inputs, batch_labels = data_slice(seq_length, conditions, inputs, labels)
+    batch_conditions, batch_inputs, batch_labels = slice_data(seq_length, conditions, inputs, labels)
     # TODO
 
     # create dnn model
