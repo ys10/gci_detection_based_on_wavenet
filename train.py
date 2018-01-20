@@ -141,6 +141,7 @@ def main():
     is_overwritten_training = save_path != restore_path
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
+    tf.logging.set_verbosity(tf.logging.INFO)
     with tf.Session(config=config) as sess:
         init = tf.global_variables_initializer()
         sess.run(init)
@@ -155,6 +156,7 @@ def main():
         # run
         step = None
         last_saved_step = saved_global_step
+        tf.logging.info("Training start !")
         for step in range(saved_global_step + 1, max_checkpoints):
             start_time = time.time()
             reduced_loss, logits, _ = sess.run([reduced_loss, batch_outputs, op])

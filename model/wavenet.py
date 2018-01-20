@@ -19,9 +19,9 @@ class WaveNetModel(object):
         with tf.name_scope("network"):
             layer_inputs = causal_convolution(inputs, self.filter_num)
             skip_connections = []
-            for i in range(len(self.dilation_rates)):
+            for layer_id in range(len(self.dilation_rates)):
                 layer_inputs, c = residual_block(layer_inputs, conditions, self.class_num,
-                                                 self.dilated_filter_kernel, i, self.dilation_rates[i])
+                                                 self.dilated_filter_kernel, layer_id, self.dilation_rates[layer_id])
                 skip_connections.append(c)
             with tf.variable_scope("skip_connections"):
                 outputs = sum(skip_connections)
