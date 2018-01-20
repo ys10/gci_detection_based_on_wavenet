@@ -2,22 +2,22 @@
 import tensorflow as tf
 
 
-def one_multiply_one_convolution(inputs, filter_num):
-    with tf.variable_scope("one_multiply_one_convolution"):
+def one_multiply_one_convolution(inputs, filter_num, name="one_multiply_one_convolution"):
+    with tf.variable_scope(name):
         outputs = tf.layers.conv1d(inputs, filter_num, 1, strides=1, padding='same')
         return outputs
 
 
-def causal_convolution(inputs, filter_num):
-    with tf.variable_scope("causal_convolution"):
+def causal_convolution(inputs, filter_num, name="causal_convolution"):
+    with tf.variable_scope(name):
         outputs = tf.layers.conv1d(inputs, filter_num, 2, strides=1, padding='same')
         return outputs
 
 
 def residual_block(inputs, conditions, filter_num, filter_size, layer_id, dilation_rate):
-    with tf.variable_scope("residual_block"):
+    with tf.variable_scope("residual_block_" + str(layer_id)):
         in_filters = inputs.shape[2]
-        with tf.variable_scope('dilated_causal_convolution_'+str(layer_id)):
+        with tf.variable_scope("dilated_causal_convolution"):
             input_conv = tf.layers.conv1d(inputs, filter_num, filter_size, padding='same', dilation_rate=dilation_rate)
             condition_conv = one_multiply_one_convolution(conditions, filter_num)
             filter_conv = tf.tanh(input_conv + condition_conv)

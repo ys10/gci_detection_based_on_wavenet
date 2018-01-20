@@ -14,12 +14,6 @@ class WaveNetModel(object):
         self.filter_num = filter_num
         self.dilation_rates = dilation_rates
         self.dilated_filter_kernel = 2
-        # self.inputs = tf.placeholder(dtype=tf.int8, shape=(self.batch_size, self.seq_length, self.input_channels),
-        #                              name="input")
-        # self.conditions = tf.placeholder(dtype=tf.int8, shape=(self.batch_size, self.seq_length, self.input_channels),
-        #                                  name="condition")
-        # self.labels = tf.placeholder(dtype=tf.int8, shape=(self.batch_size, self.seq_length, self.input_channels),
-        #                              name="label")
 
     def forward(self, inputs, conditions):
         with tf.name_scope("network"):
@@ -29,12 +23,12 @@ class WaveNetModel(object):
                 layer_inputs, c = residual_block(layer_inputs, conditions, self.class_num,
                                                  self.dilated_filter_kernel, i, self.dilation_rates[i])
                 skip_connections.append(c)
-            with tf.name_scope("skip_connections"):
+            with tf.variable_scope("skip_connections"):
                 outputs = sum(skip_connections)
                 outputs = tf.nn.relu(outputs)
-                outputs = one_multiply_one_convolution(outputs, self.class_num)
+                outputs = one_multiply_one_convolution(outputs, self.class_num, name="one_multiply_one_convolution_1")
                 outputs = tf.nn.relu(outputs)
-                outputs = one_multiply_one_convolution(outputs, self.class_num)
+                outputs = one_multiply_one_convolution(outputs, self.class_num, name="one_multiply_one_convolution_2")
                 outputs = tf.nn.softmax(outputs)
                 outputs = tf.layers.conv1d(outputs, self.class_num, 1, padding='same', activation=tf.nn.softmax)
                 return outputs
