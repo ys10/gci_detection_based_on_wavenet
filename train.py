@@ -133,8 +133,8 @@ def main():
     save_step = 10
     max_checkpoints = 51
     saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=max_checkpoints)
-    restore_path = "/tmp/"
-    save_path = "/tmp/"
+    restore_path = "tmp/"
+    save_path = "tmp/"
 
     # Even if we restored the model, we will treat it as new training
     # if the trained model is written into an arbitrary location.
