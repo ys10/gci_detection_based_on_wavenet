@@ -113,7 +113,7 @@ def main():
     batch_conditions, batch_inputs, batch_labels = slice_data(seq_length, conditions, inputs, labels)
     # TODO
 
-    # create dnn model
+    # create WaveNet model
     model = WaveNetModel(seq_length, input_channels, layer_num,
                          class_num, filter_num, dilation_rates=dilation_rates)
 
@@ -139,14 +139,20 @@ def main():
     # Even if we restored the model, we will treat it as new training
     # if the trained model is written into an arbitrary location.
     is_overwritten_training = save_path != restore_path
+
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    tf.logging.set_verbosity(tf.logging.INFO)
+
+    tf.logging.set_verbosity(tf.logging.DEBUG)
+
     with tf.Session(config=config) as sess:
+        # Start input enqueue threads.
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
         init = tf.global_variables_initializer()
         sess.run(init)
 
-        # restore variables
         saved_global_step = load_model(saver, sess, restore_path)
         if is_overwritten_training or saved_global_step is None:
             # The first training step will be saved_global_step + 1,
@@ -157,11 +163,14 @@ def main():
         step = None
         last_saved_step = saved_global_step
         tf.logging.info("Training start !")
+
+        # try:
         for step in range(saved_global_step + 1, max_checkpoints):
+            tf.logging.debug("Global step: " + str(step))
             start_time = time.time()
-            reduced_loss, logits, _ = sess.run([reduced_loss, batch_outputs, op])
+            cost, logits, _ = sess.run([reduced_loss, batch_outputs, op])
             duration = time.time() - start_time
-            tf.logging.info('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'.format(step, reduced_loss, duration))
+            tf.logging.info("step {:d} - loss = {:.3f}, ({:.3f} sec/step)".format(step, cost, duration))
             # save model
             if step % save_step == 0:
                 save_model(saver, sess, save_path, step)
@@ -171,6 +180,12 @@ def main():
         if step > last_saved_step:
             save_model(saver, sess, save_path, step)
 
+        # except Exception as e:
+        #     # Report exceptions to the coordinator
+        #     coord.request_stop(e)
+        coord.request_stop()
+        # Terminate as usual.  It is innocuous to request stop twice.
+        coord.join(threads)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
