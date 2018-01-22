@@ -131,7 +131,7 @@ def main():
 
     # Saver for storing checkpoints of the model.
     save_step = 10
-    max_checkpoints = 50
+    max_checkpoints = 51
     saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=max_checkpoints)
     restore_path = "/tmp/"
     save_path = "/tmp/"
@@ -160,32 +160,33 @@ def main():
             saved_global_step = -1
 
         # run
-        step = None
+        step = 0
         last_saved_step = saved_global_step
         tf.logging.info("Training start !")
 
-        # try:
-        for step in range(saved_global_step + 1, max_checkpoints):
-            tf.logging.debug("Global step: " + str(step))
-            start_time = time.time()
-            cost, logits, _ = sess.run([reduced_loss, batch_outputs, op])
-            duration = time.time() - start_time
-            tf.logging.info("step {:d} - loss = {:.3f}, ({:.3f} sec/step)".format(step, cost, duration))
-            # save model
-            if step % save_step == 0:
+        try:
+            for step in range(saved_global_step + 1, max_checkpoints):
+                tf.logging.debug("Global step: " + str(step))
+                start_time = time.time()
+                cost, logits, _ = sess.run([reduced_loss, batch_outputs, op])
+                duration = time.time() - start_time
+                tf.logging.info("step {:d} - loss = {:.3f}, ({:.3f} sec/step)".format(step, cost, duration))
+                # save model
+                if step % save_step == 0:
+                    save_model(saver, sess, save_path, step)
+                    last_saved_step = step
+
+            # save model at the last step
+            if step > last_saved_step:
                 save_model(saver, sess, save_path, step)
-                last_saved_step = step
 
-        # save model at the last step
-        if step > last_saved_step:
-            save_model(saver, sess, save_path, step)
-
-        # except Exception as e:
-        #     # Report exceptions to the coordinator
-        #     coord.request_stop(e)
+        except Exception as e:
+            # Report exceptions to the coordinator
+            coord.request_stop(e)
         coord.request_stop()
         # Terminate as usual.  It is innocuous to request stop twice.
         coord.join(threads)
+
 
 if __name__ == "__main__":
     main()
