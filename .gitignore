@@ -103,3 +103,4 @@ test.py
 data/*
 log/*
 .idea/*
+tmp/*

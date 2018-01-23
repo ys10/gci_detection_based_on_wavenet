@@ -5,80 +5,104 @@ from model.wavenet import WaveNetModel
 from model.ops import optimizer_factory, load_model, save_model
 
 
-# Use `tf.parse_single_example()` to extract data from a `tf.Example`
-# protocol buffer, and perform any additional per-record pre-processing.
 def parser(record):
-    # keys_to_features = {
-    #     'wave': tf.FixedLenFeature([None], tf.int64),
-    #     'labels': tf.FixedLenFeature([None], tf.float32)
-    # }
-    # parsed = tf.parse_single_example(record, keys_to_features)
-
-    # Perform additional pre-processing on the parsed data.
-    # wave = parsed["wave"]
-    # labels = parsed["labels"]
-
     features = tf.parse_single_example(record,
                                        features={
-                                           'wave': tf.FixedLenFeature([], tf.string),
-                                           'labels': tf.FixedLenFeature([], tf.string),
+                                           "wave": tf.FixedLenFeature([], tf.string),
+                                           "labels": tf.FixedLenFeature([], tf.string),
+                                           "seq_length": tf.FixedLenFeature([], tf.string),
                                        })
     # decode
-    wave = tf.decode_raw(features['wave'], tf.int64)
-    labels = tf.decode_raw(features['labels'], tf.float32)
+    wave = tf.to_float(tf.decode_raw(features["wave"], tf.int64))
+    labels = tf.decode_raw(features["labels"], tf.float32)
+    seq_length = tf.decode_raw(features["seq_length"], tf.int64)
+    return wave, labels, seq_length
 
-    return wave, labels
 
-
-def get_data_set_inputs(file_name, buffer_size=1024, epoch=10, batch_size=32):
+def read_from_data_set(file_name, buffer_size=1024, epoch=10):
     data_set = tf.data.TFRecordDataset(file_name)
-
-    # Use `Dataset.map()` to build a pair of a feature dictionary and a label
-    # tensor for each example.
     data_set = data_set.map(parser)
     data_set = data_set.shuffle(buffer_size)
     data_set = data_set.repeat(epoch)
-    data_set = data_set.batch(batch_size)
+    # data_set = data_set.batch(batch_size)
     iterator = data_set.make_one_shot_iterator()
-
-    # `features` is a dictionary in which each value is a batch of values for
-    # that feature; `labels` is a batch of labels.
-    wave, labels = iterator.get_next()
-
-    return wave, labels
+    wave, labels, seq_length = iterator.get_next()
+    return wave, labels, seq_length
 
 
-def read_and_decode(filename):
+def read_from_data_queue(filename):
     # generate a queue by filename
     filename_queue = tf.train.string_input_producer([filename])
-
     reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(filename_queue)
-    features = tf.parse_single_example(serialized_example,
-                                       features={
-                                           'wave': tf.FixedLenFeature([], tf.string),
-                                           'labels': tf.FixedLenFeature([], tf.string),
-                                       })
-    # decode
-    wave = tf.to_float(tf.decode_raw(features['wave'], tf.int64))
-    labels = tf.decode_raw(features['labels'], tf.float32)
-    return wave, labels
+    _, record = reader.read(filename_queue)
+    wave, labels, seq_length = parser(record)
+    return wave, labels, seq_length
 
 
-def slice_data(seq_length, conditions, inputs, labels):
-    batch_size = 4
+def _body(inputs, batch_inputs, step, receptive_field):
+    input = tf.expand_dims(tf.slice(inputs, [step, 0], [receptive_field, 1]), 0)
+    batch_inputs = tf.concat([batch_inputs, input], 0)
+    return inputs, batch_inputs, step, receptive_field
+
+
+def _cond(inputs, batch_inputs, step, receptive_field):
+    return tf.less(step + receptive_field, tf.shape(batch_inputs)[0])
+
+
+def _make_batch(conditions, inputs, labels, receptive_field, batch_size):
     # init
-    batch_conditions = tf.expand_dims(tf.slice(conditions, [0, 0], [seq_length, 1]), 0)
-    batch_inputs = tf.expand_dims(tf.slice(inputs, [0, 0], [seq_length, 2]), 0)
-    batch_labels = tf.expand_dims(tf.slice(labels, [0, 0], [seq_length, 2]), 0)
-    # concat
+    batch_conditions = tf.expand_dims(tf.slice(conditions, [0, 0], [receptive_field, 1]), 0)
+    batch_inputs = tf.expand_dims(tf.slice(inputs, [0, 0], [receptive_field, 2]), 0)
+    batch_labels = tf.expand_dims(tf.slice(labels, [0, 0], [receptive_field, 2]), 0)
+    batch_size = 4
     for i in range(1, batch_size):
-        condition = tf.expand_dims(tf.slice(conditions, [i, 0], [seq_length, 1]), 0)
+        condition = tf.expand_dims(tf.slice(conditions, [i, 0], [receptive_field, 1]), 0)
         batch_conditions = tf.concat([batch_conditions, condition], 0)
-        input = tf.expand_dims(tf.slice(inputs, [i, 0], [seq_length, 2]), 0)
+        input = tf.expand_dims(tf.slice(inputs, [i, 0], [receptive_field, 2]), 0)
         batch_inputs = tf.concat([batch_inputs, input], 0)
-        label = tf.expand_dims(tf.slice(labels, [i, 0], [seq_length, 2]), 0)
+        label = tf.expand_dims(tf.slice(labels, [i, 0], [receptive_field, 2]), 0)
         batch_labels = tf.concat([batch_labels, label], 0)
+    return batch_conditions, batch_inputs, batch_labels
+
+
+def make_batch(conditions, inputs, labels, receptive_field):
+
+    def _body(inputs, batch_inputs, step, receptive_field):
+        input = tf.expand_dims(tf.slice(inputs, [step, 0], [receptive_field, inputs.get_shape()[-1]]), 0)
+        batch_inputs = tf.concat([batch_inputs, input], 0)
+        step = tf.add(step, 1)
+        return inputs, batch_inputs, step, receptive_field
+
+    def _cond(inputs, batch_inputs, step, receptive_field):
+        return tf.less_equal(step + receptive_field, tf.shape(inputs)[0])
+
+    step = tf.constant(1)
+    recpt = tf.constant(receptive_field) # A Tensor of receptive_field.
+    # init
+    batch_conditions = tf.expand_dims(tf.slice(conditions, [0, 0], [receptive_field, 1]), 0)
+    _, batch_conditions, _, _ = tf.while_loop(_cond, _body, [conditions, batch_conditions, step, recpt],
+                                              shape_invariants=[
+                                                  conditions.get_shape(),
+                                                  tf.TensorShape([None, receptive_field, conditions.get_shape()[-1]]),
+                                                  step.get_shape(),
+                                                  recpt.get_shape()
+                                              ])
+    batch_inputs = tf.expand_dims(tf.slice(inputs, [0, 0], [receptive_field, 2]), 0)
+    _, batch_inputs, _, _ = tf.while_loop(_cond, _body, [inputs, batch_inputs, step, recpt],
+                                          shape_invariants=[
+                                              inputs.get_shape(),
+                                              tf.TensorShape([None, receptive_field, inputs.get_shape()[-1]]),
+                                              step.get_shape(),
+                                              recpt.get_shape()
+                                          ])
+    batch_labels = tf.expand_dims(tf.slice(labels, [0, 0], [receptive_field, 2]), 0)
+    _, batch_labels, _, _ = tf.while_loop(_cond, _body, [labels, batch_labels, step, recpt],
+                                          shape_invariants=[
+                                              labels.get_shape(),
+                                              tf.TensorShape([None, receptive_field, labels.get_shape()[-1]]),
+                                              step.get_shape(),
+                                              recpt.get_shape()
+                                          ])
     return batch_conditions, batch_inputs, batch_labels
 
 
@@ -91,18 +115,18 @@ def main():
 
     # data info
     # batch_size = 2
-    seq_length = 2**layer_num
+    receptive_field = 2**layer_num
     input_channels = 1
 
     # data
     tf_record_file_name = "data/dataset.tfrecords"
-    # conditions, inputs = get_data_set_inputs(tf_record_file_name, batch_size=batch_size)
-    conditions, inputs = read_and_decode(tf_record_file_name)
+    conditions, inputs, seq_length = read_from_data_set(tf_record_file_name)
+    # conditions, inputs = read_from_data_queue(tf_record_file_name)
     labels = inputs[1:]
     # padding
-    conditions = tf.pad(conditions, paddings=tf.constant([[seq_length - 1, seq_length - 1]]))
-    inputs = tf.pad(inputs, paddings=tf.constant([[seq_length - 1, seq_length - 1]]))
-    labels = tf.pad(labels, paddings=tf.constant([[seq_length - 1, seq_length]]))
+    conditions = tf.pad(conditions, paddings=tf.constant([[receptive_field - 1, receptive_field - 1]]))
+    inputs = tf.pad(inputs, paddings=tf.constant([[receptive_field - 1, receptive_field - 1]]))
+    labels = tf.pad(labels, paddings=tf.constant([[receptive_field - 1, receptive_field]]))
     # 1d to 2d
     conditions = tf.expand_dims(conditions, 1)
     inputs = tf.expand_dims(inputs, 1)
@@ -110,15 +134,16 @@ def main():
     inputs = tf.concat([inputs, 1-inputs], 1)
     labels = tf.concat([labels, 1-labels], 1)
     # batch
-    batch_conditions, batch_inputs, batch_labels = slice_data(seq_length, conditions, inputs, labels)
-    # TODO
+    # batch_conditions, batch_inputs, batch_labels = _make_batch(conditions, inputs, labels,
+    #                                                           receptive_field, batch_size=seq_length-receptive_field)
+    batch_conditions, batch_inputs, batch_labels = make_batch(conditions, inputs, labels, receptive_field)
 
     # create WaveNet model
-    model = WaveNetModel(seq_length, input_channels, layer_num,
+    model = WaveNetModel(receptive_field, input_channels, layer_num,
                          class_num, filter_num, dilation_rates=dilation_rates)
 
     # loss function
-    batch_outputs = model.forward(batch_inputs, batch_conditions)
+    batch_outputs = model.network(batch_inputs, batch_conditions)
     loss = tf.nn.softmax_cross_entropy_with_logits(logits=batch_outputs, labels=batch_labels)
     reduced_loss = tf.reduce_mean(loss)
 
@@ -130,8 +155,8 @@ def main():
     op = optimizer.minimize(loss, var_list=trainable)
 
     # Saver for storing checkpoints of the model.
-    save_step = 10
-    max_checkpoints = 51
+    save_step = 20
+    max_checkpoints = 60
     saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=max_checkpoints)
     restore_path = "tmp/"
     save_path = "tmp/"
@@ -143,7 +168,7 @@ def main():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
-    tf.logging.set_verbosity(tf.logging.DEBUG)
+    tf.logging.set_verbosity(tf.logging.INFO)
 
     with tf.Session(config=config) as sess:
         # Start input enqueue threads.
