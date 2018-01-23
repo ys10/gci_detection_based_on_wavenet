@@ -49,7 +49,7 @@ def _cond(inputs, batch_inputs, step, receptive_field):
     return tf.less(step + receptive_field, tf.shape(batch_inputs)[0])
 
 
-def _make_batch(conditions, inputs, labels, receptive_field, batch_size):
+def _make_batch(conditions, inputs, labels, receptive_field):
     # init
     batch_conditions = tf.expand_dims(tf.slice(conditions, [0, 0], [receptive_field, 1]), 0)
     batch_inputs = tf.expand_dims(tf.slice(inputs, [0, 0], [receptive_field, 2]), 0)
@@ -66,7 +66,6 @@ def _make_batch(conditions, inputs, labels, receptive_field, batch_size):
 
 
 def make_batch(conditions, inputs, labels, receptive_field):
-
     def _body(inputs, batch_inputs, step, receptive_field):
         input = tf.expand_dims(tf.slice(inputs, [step, 0], [receptive_field, inputs.get_shape()[-1]]), 0)
         batch_inputs = tf.concat([batch_inputs, input], 0)
@@ -77,7 +76,7 @@ def make_batch(conditions, inputs, labels, receptive_field):
         return tf.less_equal(step + receptive_field, tf.shape(inputs)[0])
 
     step = tf.constant(1)
-    recpt = tf.constant(receptive_field) # A Tensor of receptive_field.
+    recpt = tf.constant(receptive_field)  # A Tensor of receptive_field.
     # init
     batch_conditions = tf.expand_dims(tf.slice(conditions, [0, 0], [receptive_field, 1]), 0)
     _, batch_conditions, _, _ = tf.while_loop(_cond, _body, [conditions, batch_conditions, step, recpt],
@@ -108,7 +107,7 @@ def make_batch(conditions, inputs, labels, receptive_field):
 
 def main():
     # network structure
-    layer_num = 3
+    layer_num = 10
     class_num = 2
     filter_num = 4
     dilation_rates = tuple([2**i for i in range(layer_num)])
@@ -134,8 +133,7 @@ def main():
     inputs = tf.concat([inputs, 1-inputs], 1)
     labels = tf.concat([labels, 1-labels], 1)
     # batch
-    # batch_conditions, batch_inputs, batch_labels = _make_batch(conditions, inputs, labels,
-    #                                                           receptive_field, batch_size=seq_length-receptive_field)
+    # batch_conditions, batch_inputs, batch_labels = _make_batch(conditions, inputs, labels, receptive_field)
     batch_conditions, batch_inputs, batch_labels = make_batch(conditions, inputs, labels, receptive_field)
 
     # create WaveNet model
