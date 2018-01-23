@@ -10,6 +10,8 @@ wave_extension = ".wav"
 data_path = "data/dataset.tfrecords"
 mask_range = 4
 
+def feature_function():
+    return lambda array: tf.train.Feature(bytes_list=tf.train.BytesList(value=[array.tobytes()]))
 
 def dtype_feature_function(ndarray):
     """match appropriate tf.train.Feature class with dtype of ndarray or bytes. """
@@ -48,9 +50,11 @@ def main():
             for i in range(len(masked_marks)):
                 wave = masked_wave[i]
                 labels = masked_marks[i]
+                seq_length = np.array([len(masked_wave[i])], dtype=np.int64)
                 example = tf.train.Example(features=tf.train.Features(feature={
                     "wave": dtype_feature_function(wave)(wave),
-                    "labels": dtype_feature_function(labels)(labels)
+                    "labels": dtype_feature_function(labels)(labels),
+                    "seq_length": dtype_feature_function(seq_length)(seq_length)
                 }))
                 writer.write(example.SerializeToString())
 

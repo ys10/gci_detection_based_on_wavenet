@@ -5,9 +5,9 @@ from model.layers import one_multiply_one_convolution, causal_convolution, resid
 
 class WaveNetModel(object):
 
-    def __init__(self, seq_length, input_channels, layer_num, class_num, filter_num,
+    def __init__(self, receptive_field, input_channels, layer_num, class_num, filter_num,
                  dilation_rates=(1, 2, 4, 8)):
-        self.seq_length = seq_length
+        self.receptive_field = receptive_field
         self.input_channels = input_channels
         self.layer_num = layer_num
         self.class_num = class_num
@@ -15,7 +15,7 @@ class WaveNetModel(object):
         self.dilation_rates = dilation_rates
         self.dilated_filter_kernel = 2
 
-    def forward(self, inputs, conditions):
+    def network(self, inputs, conditions):
         with tf.name_scope("network"):
             layer_inputs = causal_convolution(inputs, self.filter_num)
             skip_connections = []
