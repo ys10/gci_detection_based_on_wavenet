@@ -10,13 +10,11 @@ def parser(record):
                                        features={
                                            "wave": tf.FixedLenFeature([], tf.string),
                                            "labels": tf.FixedLenFeature([], tf.string),
-                                           "seq_length": tf.FixedLenFeature([], tf.string),
                                        })
     # decode
     wave = tf.to_float(tf.decode_raw(features["wave"], tf.int64))
     labels = tf.decode_raw(features["labels"], tf.float32)
-    seq_length = tf.decode_raw(features["seq_length"], tf.int64)
-    return wave, labels, seq_length
+    return wave, labels
 
 
 def read_from_data_set(file_name, buffer_size=1024, epoch=10):
@@ -26,8 +24,8 @@ def read_from_data_set(file_name, buffer_size=1024, epoch=10):
     data_set = data_set.repeat(epoch)
     # data_set = data_set.batch(batch_size)
     iterator = data_set.make_one_shot_iterator()
-    wave, labels, seq_length = iterator.get_next()
-    return wave, labels, seq_length
+    wave, labels = iterator.get_next()
+    return wave, labels
 
 
 def read_from_data_queue(filename):
@@ -35,8 +33,8 @@ def read_from_data_queue(filename):
     filename_queue = tf.train.string_input_producer([filename])
     reader = tf.TFRecordReader()
     _, record = reader.read(filename_queue)
-    wave, labels, seq_length = parser(record)
-    return wave, labels, seq_length
+    wave, labels = parser(record)
+    return wave, labels
 
 
 def _body(inputs, batch_inputs, step, receptive_field):
@@ -119,7 +117,7 @@ def main():
 
     # data
     tf_record_file_name = "data/dataset.tfrecords"
-    conditions, inputs, seq_length = read_from_data_set(tf_record_file_name)
+    conditions, inputs = read_from_data_set(tf_record_file_name)
     # conditions, inputs = read_from_data_queue(tf_record_file_name)
     labels = inputs[1:]
     # padding
