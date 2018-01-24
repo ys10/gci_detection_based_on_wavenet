@@ -8,7 +8,7 @@ wave_path = "data/wave/"
 marks_extension = ".marks"
 wave_extension = ".wav"
 data_path = "data/dataset.tfrecords"
-mask_range = 1024
+mask_range = 64
 
 
 def dtype_feature_function(ndarray):

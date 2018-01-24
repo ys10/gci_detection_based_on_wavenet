@@ -37,16 +37,6 @@ def read_from_data_queue(filename):
     return wave, labels
 
 
-def _body(inputs, batch_inputs, step, receptive_field):
-    input = tf.expand_dims(tf.slice(inputs, [step, 0], [receptive_field, 1]), 0)
-    batch_inputs = tf.concat([batch_inputs, input], 0)
-    return inputs, batch_inputs, step, receptive_field
-
-
-def _cond(inputs, batch_inputs, step, receptive_field):
-    return tf.less(step + receptive_field, tf.shape(batch_inputs)[0])
-
-
 def _make_batch(conditions, inputs, labels, receptive_field):
     # init
     batch_conditions = tf.expand_dims(tf.slice(conditions, [0, 0], [receptive_field, 1]), 0)
@@ -105,25 +95,26 @@ def make_batch(conditions, inputs, labels, receptive_field):
 
 def main():
     # network structure
-    layer_num = 10
+    layer_num = 6
     class_num = 2
     filter_num = 4
     dilation_rates = tuple([2**i for i in range(layer_num)])
 
     # data info
-    # batch_size = 2
     receptive_field = 2**layer_num
     input_channels = 1
 
     # data
-    tf_record_file_name = "data/dataset.tfrecords"
+    tf_record_file_name = "data/dataset-64.tfrecords"
     conditions, inputs = read_from_data_set(tf_record_file_name)
     # conditions, inputs = read_from_data_queue(tf_record_file_name)
     labels = inputs[1:]
     # padding
-    conditions = tf.pad(conditions, paddings=tf.constant([[receptive_field - 1, receptive_field - 1]]))
-    inputs = tf.pad(inputs, paddings=tf.constant([[receptive_field - 1, receptive_field - 1]]))
-    labels = tf.pad(labels, paddings=tf.constant([[receptive_field - 1, receptive_field]]))
+    # padding_size = receptive_field - 1
+    padding_size = 1
+    conditions = tf.pad(conditions, paddings=tf.constant([[padding_size, padding_size]]))
+    inputs = tf.pad(inputs, paddings=tf.constant([[padding_size, padding_size]]))
+    labels = tf.pad(labels, paddings=tf.constant([[padding_size, padding_size + 1]]))
     # 1d to 2d
     conditions = tf.expand_dims(conditions, 1)
     inputs = tf.expand_dims(inputs, 1)
@@ -133,6 +124,8 @@ def main():
     # batch
     # batch_conditions, batch_inputs, batch_labels = _make_batch(conditions, inputs, labels, receptive_field)
     batch_conditions, batch_inputs, batch_labels = make_batch(conditions, inputs, labels, receptive_field)
+
+    batch_size = tf.shape(batch_conditions)[0]
 
     # create WaveNet model
     model = WaveNetModel(receptive_field, input_channels, layer_num,
@@ -144,14 +137,14 @@ def main():
     reduced_loss = tf.reduce_mean(loss)
 
     # optimizer
-    learning_rate = 1e-4
+    learning_rate = 1e-3
     momentum = 9e-1
     optimizer = optimizer_factory["adam"](learning_rate=learning_rate, momentum=momentum)
     trainable = tf.trainable_variables()
     op = optimizer.minimize(loss, var_list=trainable)
 
     # Saver for storing checkpoints of the model.
-    save_step = 20
+    save_step = 30
     max_checkpoints = 60
     saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=max_checkpoints)
     restore_path = "tmp/"
@@ -189,9 +182,9 @@ def main():
             for step in range(saved_global_step + 1, max_checkpoints):
                 tf.logging.debug("Global step: " + str(step))
                 start_time = time.time()
-                cost, logits, _ = sess.run([reduced_loss, batch_outputs, op])
+                cost, logits, _, size = sess.run([reduced_loss, batch_outputs, op, batch_size])
                 duration = time.time() - start_time
-                tf.logging.info("step {:d} - loss = {:.3f}, ({:.3f} sec/step)".format(step, cost, duration))
+                tf.logging.info("step {:d} - loss = {:.3f}, batch size = {:}, ({:.3f} sec/step)".format(step, cost, size, duration))
                 # save model
                 if step % save_step == 0:
                     save_model(saver, sess, save_path, step)
